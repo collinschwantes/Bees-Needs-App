@@ -1,0 +1,17 @@
+---
+title: "Map Instructions"
+author: ""
+date: ""
+output: html_document
+---
+
+1.  Use the *City* input to set the map's center
+      + Select a city, enter an address, or enter coordinates
+      + Do **not** use commas when adding an address or coordinates
+      + Since you are setting the map center, **only the first location will be used**
+2.  Subset data by month, year, and insect type as in other panels 
+3.  Select what type of data display you would like
+      + **Contour**: Draws polygons showing where species have been found and could be found based on block data (kernel density estimation)
+      + **Nest Blocks**: Shows nests as points with color indicating insect types. Points are jittered so you can see multiple nests at one location. 
+4. When you are ready click **Update**
+      + Each time you change a setting, you must click update
