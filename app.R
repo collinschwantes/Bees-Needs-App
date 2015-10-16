@@ -130,7 +130,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                      checkboxGroupInput(inputId = "dtrep", 
                                         label = "Data representation", 
                                         select = "Contours",
-                                        choices = list("Points" =  "Points",
+                                        choices = list("Nest Blocks" =  "Points",
                                                        "Contours" = "Contours"),
                                         inline = T),
                      actionButton(inputId = "update", label = "Update")
@@ -308,7 +308,7 @@ server2 <- function(input, output){
           bins = 10, data = data,
           geom = "polygon"
         ) +
-        scale_fill_continuous(low = "#deebf7", high = "#08589e",na.value = "black") +
+        scale_fill_continuous(name = "Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
         guides(alpha=FALSE)
     }  
     #adding point
@@ -331,7 +331,8 @@ server2 <- function(input, output){
           bins = 10, data = data,
           geom = "polygon"
         ) +
-        scale_fill_continuous(low = "#deebf7", high = "#08589e",na.value = "black") +
+        scale_fill_continuous(name = "Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
+        guides(alpha=FALSE) +
         geom_point(data = data, position = position_jitter(width = .0005, height = .0005), size = 3, alpha = .5, aes(x = lon, y = lat))
     }
     
