@@ -110,8 +110,8 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                      
                      #Map
                      tags$h3("Map Customization"),
-                     tags$p("- Select a city or add your address"),
-                     tags$p("- Click Update"),
+                     #tags$p("- Select a city or add your address"),
+                     #tags$p("- Click Update"),
                      #center map
                      #selectizeInput(inputId = "myloc",
                      #              label = "Address or Bee Block Number",
@@ -142,12 +142,19 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                           tabsetPanel(
                             tabPanel("Phenology", plotOutput(outputId = "phenology", width = "100%", click = "plot_click")),
                             tabPanel("Summary", plotOutput(outputId = "summary", width = "100%", click = "")),
-                            tabPanel("Map", plotOutput(outputId = "map", width = "100%"))
+                            tabPanel("Map",
+                                     checkboxInput(inputId = "instr", label = "Map Instructions", value = TRUE),
+                                     conditionalPanel(
+                                       condition = "input.instr == true",
+                                       includeHTML("./mapinst.html")),
+                                     plotOutput(outputId = "map", width = "100%") 
+                            )
+
                             #tabPanel("Table",dataTableOutput(outputId = "table", width = "100%"))
-                          )
+                     )
                    )
                  )
-                   )
+               )
 
 server2 <- function(input, output){
   # subset data for phenology
