@@ -13,4 +13,6 @@ This application consists of four main components:
 
 This app was developed in using Shiny in Rstudio. 
 
+It currently lives here: https://cjschwantes.shinyapps.io/Bees-Needs-App
+
 Future iterations of this application may include data tables, more flexibility in subsetting data, and co-kriged interpolated surfaces
