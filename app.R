@@ -73,7 +73,16 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                      else you would like to be able to do!", style = "margin-left:15px;")
                    ),
                  fluidRow(
-                   column(4,wellPanel(
+                   div(style="display:inline-block",icon("eye"), style="float:left"),
+                   div(style="display:inline-block",
+                       checkboxInput(inputId = "subset", 
+                                     label = "Data Panel" , value = TRUE), 
+                       style="float:left"), 
+                          
+                          conditionalPanel( 
+                            condition = "input.subset == true", 
+                            column(width = 4,
+                          
                      #Taxa
                      selectizeInput(inputId = "taxa",
                                     label = "Insect type",
@@ -140,13 +149,14 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    column(8,
                           #tabs for differnt plots 
                           tabsetPanel(
+                            tabPanel("Block "),
                             tabPanel("Phenology", plotOutput(outputId = "phenology", width = "100%", click = "plot_click")),
                             tabPanel("Summary", plotOutput(outputId = "summary", width = "100%", click = "")),
                             tabPanel("Map",
                                      checkboxInput(inputId = "instr", label = "Map Instructions", value = TRUE),
                                      conditionalPanel(
                                        condition = "input.instr == true",
-                                       includeHTML("./mapinst.html")),
+                                       includeHTML("/Users/featherlite569/Documents/Bees Needs/Interactive Bee Map/Bees Needs App/mapinst.html")),
                                      plotOutput(outputId = "map", width = "100%") 
                             )
 
@@ -155,6 +165,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    )
                  )
                )
+
 
 server2 <- function(input, output){
   # subset data for phenology
