@@ -3,6 +3,7 @@ library(shiny)
 library(shinythemes)
 library(DT)
 library(plyr)
+library(RColorBrewer)
 
 ## GOALS 3 panel page that uses side bar format to visualize data in a variety of ways
 # Phenology
@@ -148,11 +149,13 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    column(8,
                           #tabs for differnt plots 
                           tabsetPanel(
-                            tabPanel("Block ",
+                            tabPanel(title = "Block",
+                                     h5("Enter your block number to see how your block compares to 
+                                       the whole bees needs data set.", style = "margin-top:15px;"),
                                      selectizeInput(inputId = "block",
                                                             label = "Bee Block Number",
                                                             choices = block.numbers,
-                                                            multiple = T,
+                                                            multiple = F,
                                                             options = list(create = T)),
                                      plotOutput(outputId = "piechart",width = "100%")
                                      ),
@@ -162,7 +165,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                                      checkboxInput(inputId = "instr", label = p(icon("eye"), "Map Instructions"), value = TRUE),
                                      conditionalPanel(
                                        condition = "input.instr == true",
-                                       includeHTML("/Users/featherlite569/Documents/Bees Needs/Interactive Bee Map/Bees Needs App/mapinst.html")),
+                                       includeHTML("./mapinst.html")),
                                      plotOutput(outputId = "map", width = "100%") 
                             )
 
@@ -549,14 +552,13 @@ server2 <- function(input, output){
     
   })
   
-  output$piechart <- renderPlot({piechart()},height = 750)
+  output$piechart <- renderPlot({piechart()},height = 750,res = 150)
   
   output$table <- renderDataTable({ tbnattcomp} , options = list(scrollX = T)) 
 }
 
 
 shinyApp(ui = ui2,server = server2)
-
 
 
 
