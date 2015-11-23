@@ -59,8 +59,11 @@ all <- c("All" = '1')
 city.choices <- c(city.choices, all) # named list for selectize input
 
 match("Block.number",names(tbn34))
-block.numbers <- as.numeric(as.character(tbn34[!is.na(tbn34$lon) ,23]))
-names(block.numbers) <- as.character(block.numbers)
+block.numbers <- (unique(as.character(tbn34[,23])))
+names(block.numbers) <- (block.numbers)
+
+block.numbers <- sort(block.numbers)
+head(block.numbers)
 
 #User Interface
 ui2 <- fluidPage( theme = shinytheme('spacelab'),
@@ -72,8 +75,13 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                      Have fun playing around with the data and let me know if there is anything
                      else you would like to be able to do!", style = "margin-left:15px;")
                    ),
-                 fluidRow(
-                   column(4,wellPanel(
+                 fluidRow(style = "margin-left:15px;",
+                       checkboxInput(inputId = "subset", 
+                                     label =  p(icon("eye"), "Data Panel"), value = TRUE), 
+                          conditionalPanel( 
+                            condition = "input.subset == true", 
+                            column(width = 4,
+                          
                      #Taxa
                      selectizeInput(inputId = "taxa",
                                     label = "Insect type",
@@ -140,13 +148,21 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    column(8,
                           #tabs for differnt plots 
                           tabsetPanel(
+                            tabPanel("Block ",
+                                     selectizeInput(inputId = "block",
+                                                            label = "Bee Block Number",
+                                                            choices = block.numbers,
+                                                            multiple = T,
+                                                            options = list(create = T)),
+                                     plotOutput(outputId = "piechart",width = "100%")
+                                     ),
                             tabPanel("Phenology", plotOutput(outputId = "phenology", width = "100%", click = "plot_click")),
                             tabPanel("Summary", plotOutput(outputId = "summary", width = "100%", click = "")),
                             tabPanel("Map",
-                                     checkboxInput(inputId = "instr", label = "Map Instructions", value = TRUE),
+                                     checkboxInput(inputId = "instr", label = p(icon("eye"), "Map Instructions"), value = TRUE),
                                      conditionalPanel(
                                        condition = "input.instr == true",
-                                       includeHTML("./mapinst.html")),
+                                       includeHTML("/Users/featherlite569/Documents/Bees Needs/Interactive Bee Map/Bees Needs App/mapinst.html")),
                                      plotOutput(outputId = "map", width = "100%") 
                             )
 
@@ -155,6 +171,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    )
                  )
                )
+
 
 server2 <- function(input, output){
   # subset data for phenology
@@ -439,6 +456,100 @@ server2 <- function(input, output){
   # output$mapbrushed <- renderPrint({
   #  brushedPoints(tbn34, input$map_brush)
   # })
+  
+####### Pie Chart  
+  piechart <- reactive({
+    
+    tbnPIE <- tbn34
+    
+    #if(input$year != 1) {tbnPIE <- tbnPIE[tbnPIE$Year == input$year,]}
+    
+    tbnPIE$Block.number <-as.factor(as.character(tbnPIE$Block.number))
+    str(tbnPIE$Block.number)
+    
+    tbn_pie <- ddply(tbnPIE,.variables = .(Block.number,Year, Va.Plug), summarize,
+                     plug_tot = length(Va.Plug)
+    )
+    
+    pie_sums <- tapply(tbn_pie$plug_tot,tbn_pie$Block.number,sum)
+    
+    pie_sums <- as.data.frame((pie_sums))
+    
+    str(pie_sums)
+    
+    Bl_pi <- row.names(pie_sums)
+    pie_sums$Block.number <- Bl_pi
+    
+    pie_data<- merge(tbn_pie,pie_sums, by = "Block.number")
+    
+    pie_data$pie_sums <- unname(pie_data$`(pie_sums)`)
+    
+    pie_data$per <- pie_data$plug_tot/pie_data$pie_sums
+    
+    
+    pie_data <- pie_data[,-5]
+  
+    
+    pie_cumsum <- tapply(pie_data$per,pie_data$Block.number, cumsum)
+    
+    ### get into format with block number and cumsum of length(pie_data)
+    
+    list2df <- function (x) {
+      df <- do.call(rbind, lapply(x, data.frame))
+      #  names(df)[1] <- col_name
+    }
+    
+    pie_cumsum_df <- list2df(x = pie_cumsum)
+    
+    pie_data$ymax_l <-  pie_cumsum_df[[1]]
+    pie_data$ymin_l <- c(0,pie_data$ymax_l[1:(length(pie_data$ymax_l)-1)])
+    
+    
+    plug_color <- brewer.pal(12,"Paired")
+    
+    plug_color <- c(plug_color, "#000000", "#969696")
+    
+    pie_data[pie_data$ymin_l == 1,8] <- 0
+  
+    #re think how to get total block attributes 
+ 
+    grand_plugs <- sum(pie_data$plug_tot)
+    
+    pie_data$grand_plugs <- rep(grand_plugs,length(pie_data$Block.number))
+    
+    pie_data$grand_per <- pie_data$plug_tot/pie_data$grand_plugs
+    
+    pie_data <- arrange(pie_data,Va.Plug, grand_per)
+    
+    pie_data$ymax_T <- cumsum(pie_data$grand_per)
+    
+    pie_data$ymin_T <- c(0,pie_data$ymax_T[1:(length(pie_data$ymax_T)-1)])
+    
+    Pie_Chart <- ggplot(pie_data[pie_data$Block.number == input$block,]) + 
+      geom_rect(aes(fill=Va.Plug, ymax=ymax_l, ymin=ymin_l, xmax=12, xmin=7)) +
+      geom_rect(data = pie_data, aes(fill=Va.Plug, ymax=ymax_T, ymin=ymin_T, xmax=6, xmin = 0)) +
+      xlim(c(0, 13)) + 
+      scale_fill_manual(values = plug_color) +
+      geom_text(aes(label = Va.Plug, y = (ymax_l+ymin_l)/2 ,x = 13)) + 
+      theme(axis.line=element_blank(),
+            axis.text.x=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks=element_blank(),
+            axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+            panel.background=element_blank(),
+            panel.border=element_blank(),
+            panel.grid.major=element_blank(),
+            panel.grid.minor=element_blank(),
+            plot.background=element_blank()
+      ) +
+      coord_polar(theta="y") 
+    
+    Pie_Chart
+    
+  })
+  
+  output$piechart <- renderPlot({piechart()},height = 750)
   
   output$table <- renderDataTable({ tbnattcomp} , options = list(scrollX = T)) 
 }
