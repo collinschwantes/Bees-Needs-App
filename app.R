@@ -4,6 +4,8 @@ library(shinythemes)
 library(DT)
 library(plyr)
 library(RColorBrewer)
+library(Cairo)
+library(dplyr)
 
 ## GOALS 3 panel page that uses side bar format to visualize data in a variety of ways
 # Phenology
@@ -74,99 +76,202 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                    #use www folder to make files accessible ~ for images, css, etc 
                    p("Use this interactive data page to explore trends in cavity nesting bee data.
                      Have fun playing around with the data and let me know if there is anything
-                     else you would like to be able to do!", style = "margin-left:15px;")
+                     else you would like to be able to do!", style = "margin-left:15px; margin-right:15px; text-align:center;")
                    ),
                  fluidRow(style = "margin-left:15px;",
-                       checkboxInput(inputId = "subset", 
-                                     label =  p(icon("eye"), "Data Panel"), value = TRUE), 
-                          conditionalPanel( 
-                            condition = "input.subset == true", 
-                            column(width = 4,
-                          
-                     #Taxa
-                     selectizeInput(inputId = "taxa",
-                                    label = "Insect type",
-                                    choices = taxa.choices,
-                                    select = 1,
-                                    multiple = T,
-                                    options = list(maxItems = 4)),
-                     #year
-                     selectizeInput(inputId = "year",
-                                    label = "Year",
-                                    select = 1,
-                                    choices = c(all,list( "2013" = 2013, "2014" = 2014))),
-                     #City
-                     selectizeInput(inputId = 'city',
-                                    label = 'City',
-                                    select = 1,
-                                    multiple = T,
-                                    choices = city.choices,
-                                    options = list(maxItems = 4, create = TRUE)),
-                     #Date 
-                     sliderInput(inputId = "months",
-                                 label = "Month Range",
-                                 min = 5,
-                                 max = 11,
-                                 value = c(5,11)),
-                     #Facet Wrap 
-                     checkboxGroupInput(inputId = "wrap", 
-                                        label = "Split Plots by:", 
-                                        #select = NULL,
-                                        choices = list("City" =  "City",
-                                                       "Insect" = "Va.General",
-                                                       "Project" = "Project"), #add facet wrap
-                                        inline = T),
-                     
-                     #Map
-                     tags$h3("Map Customization"),
-                     #tags$p("- Select a city or add your address"),
-                     #tags$p("- Click Update"),
-                     #center map
-                     #selectizeInput(inputId = "myloc",
-                     #              label = "Address or Bee Block Number",
-                     #           choices = block.numbers,
-                     #            options = list(create = TRUE)),
-                     #set zoom
-                     sliderInput(inputId = "zoom",
-                                 label = "Set your Map Scale",
-                                 value = 13,
-                                 min = 1, max = 18),
-                     #set map type
-                     radioButtons(inputId = "mtype", label = h5("Map Type"),
-                                  choices = list("Watercolor" = "watercolor", "Toner" = "toner",
-                                                 "Terrain" = "terrain"), selected = "toner"),
-                     #points or contourscheckbox
-                     checkboxGroupInput(inputId = "dtrep", 
-                                        label = "Data representation", 
-                                        select = "Contours",
-                                        choices = list("Nest Blocks" =  "Points",
-                                                       "Contours" = "Contours"),
-                                        inline = T),
-                     actionButton(inputId = "update", label = "Update")
-                   )
-                   
-                   ),
-                   column(8,
+                   column(12,
                           #tabs for differnt plots 
                           tabsetPanel(
                             tabPanel(title = "Block",
-                                     h5("Enter your block number to see how your block compares to 
+                                     fluidRow(
+                                        h5("Enter your block number to see how your block compares to 
                                        the whole bees needs data set.", style = "margin-top:15px;"),
-                                     selectizeInput(inputId = "block",
-                                                            label = "Bee Block Number",
-                                                            choices = block.numbers,
-                                                            multiple = F,
-                                                            options = list(create = T)),
-                                     plotOutput(outputId = "piechart",width = "100%")
+                                        selectizeInput(inputId = "block",
+                                                       label = "Bee Block Number",
+                                                       choices = block.numbers,
+                                                       multiple = F,
+                                                       options = list(create = T))
+                                        ),
+                                     fluidRow(
+                                       column(4, 
+                                               h3("Number of Nests"),
+                                               h1(textOutput("plug_tot")),
+                                              h4("Percentile: ", textOutput("tot_per"))
+                                              ),
+                                       column(4, 
+                                              h3("Types of Nests"),
+                                              h1(textOutput("plug_div")),
+                                              h4("Percentile: ",textOutput("plug_per"))
+                                       ),
+                                       column(4, 
+                                              h3("Block Summary Statistics"),
+                                              h5("Average number of nests: 12"),
+                                              h5("Average number of types: 3"),
+                                              h5("Total records used: 5597")
+                                       )
                                      ),
-                            tabPanel("Phenology", plotOutput(outputId = "phenology", width = "100%", click = "plot_click")),
-                            tabPanel("Summary", plotOutput(outputId = "summary", width = "100%", click = "")),
+                                       
+                                     plotOutput(outputId = "piechart",width = "100%")
+          
+                                     ),
+                            tabPanel("Phenology", 
+                                     checkboxInput(inputId = "subset", 
+                                                   label =  p(icon("eye"), "Data Panel"), value = TRUE), 
+                                     conditionalPanel( 
+                                       condition = "input.subset == true", 
+                                       column(width = 4,
+                                              
+                                              #Taxa
+                                              selectizeInput(inputId = "taxa",
+                                                             label = "Insect type",
+                                                             choices = taxa.choices,
+                                                             select = 1,
+                                                             multiple = T,
+                                                             options = list(maxItems = 4)),
+                                              #year
+                                              selectizeInput(inputId = "year",
+                                                             label = "Year",
+                                                             select = 1,
+                                                             choices = c(all,list( "2013" = 2013, "2014" = 2014))),
+                                              #City
+                                              selectizeInput(inputId = 'city',
+                                                             label = 'City',
+                                                             select = 1,
+                                                             multiple = T,
+                                                             choices = city.choices,
+                                                             options = list(maxItems = 4, create = TRUE)),
+                                              #Date 
+                                              sliderInput(inputId = "months",
+                                                          label = "Month Range",
+                                                          min = 5,
+                                                          max = 11,
+                                                          value = c(5,11)),
+                                              #Facet Wrap 
+                                              checkboxGroupInput(inputId = "wrap", 
+                                                                 label = "Split Plots by:", 
+                                                                 #select = NULL,
+                                                                 choices = list("City" =  "City",
+                                                                                "Insect" = "Va.General",
+                                                                                "Project" = "Project"), #add facet wrap
+                                                                 inline = T)
+                                              
+                                             
+                                       )
+                                       
+                                     ),
+                                     column(8,plotOutput(outputId = "phenology", width = "100%", click = "plot_click")
+                                            )
+                                     ),
+                            tabPanel("Summary",
+                                     checkboxInput(inputId = "subsets", 
+                                                             label =  p(icon("eye"), "Data Panel"), value = TRUE), 
+                                     conditionalPanel( 
+                                       condition = "input.subsets == true", 
+                                       column(width = 4,
+                                              #Taxa
+                                              selectizeInput(inputId = "taxas",
+                                                             label = "Insect type",
+                                                             choices = taxa.choices,
+                                                             select = 1,
+                                                             multiple = T,
+                                                             options = list(maxItems = 4)),
+                                              #year
+                                              selectizeInput(inputId = "years",
+                                                             label = "Year",
+                                                             select = 1,
+                                                             choices = c(all,list( "2013" = 2013, "2014" = 2014))),
+                                              #City
+                                              selectizeInput(inputId = 'citys',
+                                                             label = 'City',
+                                                             select = 1,
+                                                             multiple = T,
+                                                             choices = city.choices,
+                                                             options = list(maxItems = 4, create = TRUE)),
+                                              #Date 
+                                              sliderInput(inputId = "monthss",
+                                                          label = "Month Range",
+                                                          min = 5,
+                                                          max = 11,
+                                                          value = c(5,11)),
+                                              #Facet Wrap 
+                                              checkboxGroupInput(inputId = "wraps", 
+                                                                 label = "Sort Plots by:", 
+                                                                 #select = NULL,
+                                                                 choices = list("City" =  "City",
+                                                                                "Insect" = "Va.General",
+                                                                                "Project" = "Project"), #add facet wrap
+                                                                 inline = T)
+                                              
+                                       )
+                                       ),
+                                     column(8,
+                                     plotOutput(outputId = "summary", width = "100%", click = "")
+                                     )
+                                     ),
                             tabPanel("Map",
                                      checkboxInput(inputId = "instr", label = p(icon("eye"), "Map Instructions"), value = TRUE),
                                      conditionalPanel(
                                        condition = "input.instr == true",
                                        includeHTML("./mapinst.html")),
-                                     plotOutput(outputId = "map", width = "100%") 
+                                     
+                                     column(4,
+                                            #City
+                                            #City
+                                            selectizeInput(inputId = 'cityM',
+                                                           label = 'City',
+                                                           select = 1,
+                                                           multiple = T,
+                                                           choices = city.choices,
+                                                           options = list(maxItems = 4, create = TRUE)),
+                                            #Taxa
+                                            selectizeInput(inputId = "taxaM",
+                                                           label = "Insect type",
+                                                           choices = taxa.choices,
+                                                           select = 1,
+                                                           multiple = T,
+                                                           options = list(maxItems = 4)),
+                                            #year
+                                            selectizeInput(inputId = "yearM",
+                                                           label = "Year",
+                                                           select = 1,
+                                                           choices = c(all,list( "2013" = 2013, "2014" = 2014))),
+                                            
+                                            #Date 
+                                            sliderInput(inputId = "monthsM",
+                                                        label = "Month Range",
+                                                        min = 5,
+                                                        max = 11,
+                                                        value = c(5,11))
+                                            ),
+                                     
+                                     column(8,
+                                            fluidRow(
+                                              #set zoom
+                                              column(3, 
+                                                     numericInput(inputId = "zoom",
+                                                                     label = "Set your Map Scale",
+                                                                     value = 13,
+                                                                     min = 1, max = 18, step = 1)),
+                                              #set maptype
+                                              column(3,
+                                                     radioButtons(inputId = "mtype", label = h5("Map Type"),
+                                                                  choices = list("Watercolor" = "watercolor", "Toner" = "toner",
+                                                                                 "Terrain" = "terrain"), selected = "toner")),
+                                              #data display
+                                              column(3,
+                                                     checkboxGroupInput(inputId = "dtrep", 
+                                                                        label = "Data representation", 
+                                                                        select = "Contours",
+                                                                        choices = list("Nest Blocks" =  "Points",
+                                                                                       "Contours" = "Contours"),
+                                                                        inline = T)),
+                                             #Action button
+                                               column(3,
+                                                     actionButton(inputId = "update", label = "Update"))
+                                            ),
+                                            fluidRow(plotOutput(outputId = "map", width = "100%"))
+                                      
+                                     )
                             )
 
                             #tabPanel("Table",dataTableOutput(outputId = "table", width = "100%"))
@@ -177,6 +282,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
 
 
 server2 <- function(input, output){
+  options(shiny.usecairo=TRUE)
   # subset data for phenology
   #year
   #month
@@ -194,7 +300,7 @@ server2 <- function(input, output){
     if(is.null(input$wrap)){
       ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
         geom_density(alpha = 0.25, aes(y = ..density..)) + 
-        labs( x = "Date", y= "Reported Nesting Events (density)") +
+        labs( x = "Date", y= "Percentage of Nests") +
         theme_bw() +
         theme( axis.text.x  = element_text(size=16), 
                axis.text.y = element_text(size=16),
@@ -208,7 +314,7 @@ server2 <- function(input, output){
       if(input$wrap == "City") {
         ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
           geom_density(alpha = 0.25, aes(y = ..density..)) + #get the units of density from minutes to months
-          labs( x = "Date", y= "Reported Nesting Events (density)") +
+          labs( x = "Date", y= "Percentage of Nests") +
           theme( axis.text.x  = element_text(size=16), 
                  axis.text.y = element_text(size=16),
                  axis.title.x  = element_text(size=16), 
@@ -221,7 +327,7 @@ server2 <- function(input, output){
             if(input$wrap == "Va.General") { #TAXA
               ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
                 geom_density(alpha = 0.25, aes(y =..density..)) + #get the units of density from minutes to months
-                labs( x = "Date", y= "Reported Nesting Events (density)") +
+                labs( x = "Date", y= "Percentage of Nests") +
                 theme( axis.text.x  = element_text(size=16), 
                        axis.text.y = element_text(size=16),
                        axis.title.x  = element_text(size=16), 
@@ -246,55 +352,55 @@ server2 <- function(input, output){
     ) 
     
     
-    sum.tbn34 <- sum.tbn34[sum.tbn34$month == input$months[[1]]:input$months[[2]],]
-    if(input$year != 1){sum.tbn34 <- sum.tbn34[sum.tbn34$Year == input$year,]}
-    if(input$taxa != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$Va.General %in% input$taxa,]}
-    if(input$city != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$City %in% input$city,]}
+    sum.tbn34 <- sum.tbn34[sum.tbn34$month == input$monthss[[1]]:input$monthss[[2]],]
+    if(input$years != 1){sum.tbn34 <- sum.tbn34[sum.tbn34$Year == input$years,]}
+    if(input$taxas != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$Va.General %in% input$taxas,]}
+    if(input$citys != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$City %in% input$citys,]}
     
     
     
-    if(is.null(input$wrap)){  
+    if(is.null(input$wraps)){  
       bxplot <- ggplot(sum.tbn34, aes(y = Abundance, x = City))
       bxplot + geom_boxplot() + 
         geom_jitter(position = position_jitter(height = 0.1,width = .05), alpha = .1, shape = 20) +
         labs( x = "City", y= "Reported Nests per Block") +
         theme_bw() +
-        theme( axis.text.x  = element_text(angle=if(input$city != '1'){0}else{90},size=16), 
+        theme( axis.text.x  = element_text(angle=if(input$citys != '1'){0}else{90},size=16), 
                axis.text.y = element_text(size=16),
                axis.title.x  = element_text(size=16), 
                axis.title.y = element_text(size=16)) +
         stat_summary(fun.data=f, geom="text", vjust=-0.7, col="black")
       
-    } else { if(input$wrap == 'City'){
+    } else { if(input$wraps == 'City'){
       
       bxplot <- ggplot(sum.tbn34, aes(y = Abundance, x = City))
       bxplot + geom_boxplot() + 
         geom_jitter(position = position_jitter(height = 0.1,width = .05), alpha = .1, shape = 20) +
         labs( x = "City", y= "Reported Nests per Block") +
         theme_bw() +
-        theme( axis.text.x  = element_text(angle=if(input$city != '1'){0}else{90},size=16), 
+        theme( axis.text.x  = element_text(angle=if(input$citys != '1'){0}else{90},size=16), 
                axis.text.y = element_text(size=16),
                axis.title.x  = element_text(size=16), 
                axis.title.y = element_text(size=16)) +
         stat_summary(fun.data=f, geom="text", vjust=-0.7, col="black") 
       
-    } else { if(input$wrap == 'Va.General'){
+    } else { if(input$wraps == 'Va.General'){
       
       bxplot <- ggplot(sum.tbn34, aes(y = Abundance, x = Va.General))
       bxplot + geom_boxplot() + 
         geom_jitter(position = position_jitter(height = 0.1,width = .05), alpha = .1, shape = 20) +
         labs( x = "Insect Type", y= "Reported Nests per Block") +
         theme_bw() +
-        theme( axis.text.x  = element_text(angle=if(input$taxa != '1'){0}else{90},size=16), 
+        theme( axis.text.x  = element_text(angle=if(input$taxas != '1'){0}else{90},size=16), 
                axis.text.y = element_text(size=16),
                axis.title.x  = element_text(size=16), 
                axis.title.y = element_text(size=16)) +
         stat_summary(fun.data=f, geom="text", vjust=-0.7, col="black")
-    } else {if(input$wrap == 'Project'){
+    } else {if(input$wraps == 'Project'){
       
       bxplot <- ggplot(sum.tbn34, aes(y = Abundance, x = Projects))
       bxplot + geom_boxplot() + 
-        geom_jitter(position = position_jitter(height = 0.1,width = .05), alpha = , shape = 20) +
+        geom_jitter(position = position_jitter(height = 0.1,width = .05), alpha = .1, shape = 20) +
         labs( x = "Project", y= "Reported Nests per Block") +
         theme_bw() +
         theme( axis.text.x  = element_text(angle= 0, size=16), 
@@ -314,12 +420,12 @@ server2 <- function(input, output){
   # subest data Map
   Map.plot <- eventReactive(input$update,{ 
     data <- tbn34
-    data <- data[data$month == input$months[[1]]:input$months[[2]],]
-    if(input$year != 1) {data <- data[data$Year == input$year,]}
-    if(input$taxa != 1) {data <- data[data$Va.General %in% input$taxa,]}
+    data <- data[data$month == input$monthsM[[1]]:input$monthsM[[2]],]
+    if(input$yearM != 1) {data <- data[data$Year == input$yearM,]}
+    if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]}
     
     #location for map center   
-    map.center <- as.matrix(geocode(input$city[[1]], output = "latlon"))
+    map.center <- as.matrix(geocode(input$cityM[[1]], output = "latlon"))
     
     myMap <- get_map(location = map.center, 
                      zoom = input$zoom,
@@ -461,7 +567,6 @@ server2 <- function(input, output){
   # })
   
 ####### Pie Chart  
-  piechart <- reactive({
     
     tbnPIE <- tbn34
     
@@ -528,11 +633,19 @@ server2 <- function(input, output){
     
     pie_data$ymin_T <- c(0,pie_data$ymax_T[1:(length(pie_data$ymax_T)-1)])
     
+    grand_pie_data <- summarize(group_by(pie_data,Va.Plug), grand_per = sum(grand_per))
+    
+    grand_pie_data$ymax <- cumsum(grand_pie_data$grand_per)
+    
+    grand_pie_data$ymin <- c(0,grand_pie_data$ymax[1:(length(grand_pie_data$ymax)-1)])
+    
+    piechart <- reactive({  
+    
     Pie_Chart <- ggplot(pie_data[pie_data$Block.number == input$block,]) + 
       geom_rect(aes(fill=Va.Plug, ymax=ymax_l, ymin=ymin_l, xmax=12, xmin=7)) +
-      geom_rect(data = pie_data, aes(fill=Va.Plug, ymax=ymax_T, ymin=ymin_T, xmax=6, xmin = 0)) +
+      geom_rect(data = grand_pie_data, aes(fill=Va.Plug, ymax=ymax, ymin=ymin, xmax=6, xmin = 0)) +
       xlim(c(0, 13)) + 
-      scale_fill_manual(values = plug_color) +
+      scale_fill_manual(values = plug_color, name = "Plug Type") +
       geom_text(aes(label = Va.Plug, y = (ymax_l+ymin_l)/2 ,x = 13)) + 
       theme(axis.line=element_blank(),
             axis.text.x=element_blank(),
@@ -552,7 +665,96 @@ server2 <- function(input, output){
     
   })
   
-  output$piechart <- renderPlot({piechart()},height = 750,res = 150)
+  output$piechart <- renderPlot({piechart()},height = 750)
+  #Number of plugs per block
+  Plug_total <- reactive({ 
+    
+    Num_plugs <- pie_data[pie_data$Block.number == input$block,5][1]
+  })
+  
+  output$plug_tot <- renderText({ Plug_total() })
+  
+  #Plug total Percentile
+  Plug_tot <- reactive({
+    pie_stats <- summarize(group_by(pie_data, Block.number), 
+                           div = length(Va.Plug), 
+                           tots = mean(pie_sums))
+    
+    pie_stats$percentile_tots <- as.character(round(percent_rank(pie_stats$tots)*100,0)) 
+    
+    substrRight <- function(x, n){
+      substr(x, nchar(x)-n+1, nchar(x))
+    }
+    
+    if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "1" ) 
+    {paste(pie_stats[pie_stats$Block.number == input$block, 4],"st", sep= "")} else {
+      if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "2" ) 
+      { paste(pie_stats[pie_stats$Block.number == input$block, 4],"nd", sep= "")} else {
+        if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "3" ) 
+        { paste(pie_stats[pie_stats$Block.number == input$block, 4],"rd", sep= "")} else {
+          { paste(pie_stats[pie_stats$Block.number == input$block, 4],"th", sep= "")}
+          
+        }
+        
+      }
+      
+    }
+    
+  })
+  
+  output$tot_per <- renderText({ Plug_tot() })
+  
+  # Plug richness
+  Plug_div <- reactive({
+    plug_div <- length(pie_data[pie_data$Block.number == input$block,3])
+  })  
+  
+  output$plug_div <- renderText({ Plug_div() })
+  
+  #Plug richness Percentile
+  Plug_per <- reactive({
+    pie_stats <- summarize(group_by(pie_data, Block.number), 
+                           div = length(Va.Plug), 
+                           tots = mean(pie_sums))
+    
+    pie_stats$percentile <- as.character(round(percent_rank(pie_stats$div)*100,0)) 
+    
+    substrRight <- function(x, n){
+      substr(x, nchar(x)-n+1, nchar(x))
+    }
+
+    if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "1" ) 
+    {paste(pie_stats[pie_stats$Block.number == input$block, 4],"st", sep= "")} else {
+      if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "2" ) 
+      { paste(pie_stats[pie_stats$Block.number == input$block, 4],"nd", sep= "")} else {
+        if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "3" ) 
+        { paste(pie_stats[pie_stats$Block.number == input$block, 4],"rd", sep= "")} else {
+           { paste(pie_stats[pie_stats$Block.number == input$block, 4],"th", sep= "")}
+          
+          }
+        
+        }
+      
+      }
+    
+  })
+  
+output$plug_per <- renderText({ Plug_per() })
+  
+output$Rep_freq <- reactive({
+  
+  report_dt <- tbn34[tbn34$Block.number == 131002,]
+  
+  ggplot(report_dt,aes(x = sys.time)) +
+  geom_dotplot( method = "histodot") +
+    labs( x = "Date", y= "Count") +
+    theme( axis.text.x  = element_text(size=16), 
+           axis.text.y = element_text(size=16),
+           axis.title.x  = element_text(size=16), 
+           axis.title.y = element_text(size=16)) +
+    theme_bw() 
+  
+})  
   
   output$table <- renderDataTable({ tbnattcomp} , options = list(scrollX = T)) 
 }
