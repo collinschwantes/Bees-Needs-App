@@ -300,7 +300,7 @@ server2 <- function(input, output){
     if(is.null(input$wrap)){
       ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
         geom_density(alpha = 0.25, aes(y = ..density..)) + 
-        labs( x = "Date", y= "Percentage of Nests") +
+        labs( x = "Date", y= "Density") +
         theme_bw() +
         theme( axis.text.x  = element_text(size=16), 
                axis.text.y = element_text(size=16),
@@ -314,7 +314,7 @@ server2 <- function(input, output){
       if(input$wrap == "City") {
         ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
           geom_density(alpha = 0.25, aes(y = ..density..)) + #get the units of density from minutes to months
-          labs( x = "Date", y= "Percentage of Nests") +
+          labs( x = "Date", y= "Density") +
           theme( axis.text.x  = element_text(size=16), 
                  axis.text.y = element_text(size=16),
                  axis.title.x  = element_text(size=16), 
@@ -327,7 +327,7 @@ server2 <- function(input, output){
             if(input$wrap == "Va.General") { #TAXA
               ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
                 geom_density(alpha = 0.25, aes(y =..density..)) + #get the units of density from minutes to months
-                labs( x = "Date", y= "Percentage of Nests") +
+                labs( x = "Date", y= "Density") +
                 theme( axis.text.x  = element_text(size=16), 
                        axis.text.y = element_text(size=16),
                        axis.title.x  = element_text(size=16), 
@@ -441,7 +441,7 @@ server2 <- function(input, output){
           bins = 10, data = data,
           geom = "polygon"
         ) +
-        scale_fill_continuous(name = "Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
+        scale_fill_continuous(name = "Psuedo-Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
         guides(alpha=FALSE)
     }  
     #adding point
@@ -464,7 +464,7 @@ server2 <- function(input, output){
           bins = 10, data = data,
           geom = "polygon"
         ) +
-        scale_fill_continuous(name = "Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
+        scale_fill_continuous(name = "Psuedo-Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
         guides(alpha=FALSE) +
         geom_point(data = data, position = position_jitter(width = .0005, height = .0005), size = 3, alpha = .5, aes(x = lon, y = lat))
     }
