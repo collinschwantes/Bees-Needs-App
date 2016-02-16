@@ -72,7 +72,7 @@ head(block.numbers)
 ui2 <- fluidPage( theme = shinytheme('spacelab'),
                  fluidRow( 
                    h1("Bees Needs Interactive Data", align = "center"),
-                   h5(a(href = "www.collinschwantes.com", "By Collin Schwantes"), align = "center"),
+                   h5(a(href = "http://collinschwantes.github.io/", "By Collin Schwantes"), align = "center"),
                    #use www folder to make files accessible ~ for images, css, etc 
                    p("Use this interactive data page to explore trends in cavity nesting bee data.
                      Have fun playing around with the data and let me know if there is anything
