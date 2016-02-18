@@ -21,6 +21,7 @@ str(tbn34)
 
 #convert to time format
 tbn34$sys.time <- as.POSIXct(tbn34$sys.time, tz = "MST")
+tbn34$month<- as.numeric(substring(tbn34$sys.time,first = 6,7))
 
 levels(tbn34$Va.General)
 
