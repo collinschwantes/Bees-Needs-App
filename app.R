@@ -292,6 +292,11 @@ server2 <- function(input, output){
   
   f <- function(y) c(label=round(mean(y), digits = 1), y=median(y))
   
+  
+  tbn34$Date_md <- format(tbn34$sys.time,format = "%m-%d")
+  
+  tbn34$Date_md <- as.Date(tbn34$Date_md,"%m-%d")
+    
   pheno.plot <- reactive({ 
     tbn.ph <- tbn34
     tbn.ph <- tbn.ph[tbn.ph$month == input$months[[1]]:input$months[[2]],]
@@ -299,7 +304,7 @@ server2 <- function(input, output){
     if(input$taxa != 1) {tbn.ph <- tbn.ph[tbn.ph$Va.General %in% input$taxa,]}
     if(input$city != 1) {tbn.ph <- tbn.ph[tbn.ph$City %in% input$city,]}
     if(is.null(input$wrap)){
-      ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
+      ggplot(tbn.ph,aes(Date_md, fill = Va.General)) +
         geom_density(alpha = 0.25, aes(y = ..density..)) + 
         labs( x = "Date", y= "Density") +
         theme_bw() +
@@ -355,8 +360,8 @@ server2 <- function(input, output){
     
     sum.tbn34 <- sum.tbn34[sum.tbn34$month == input$monthss[[1]]:input$monthss[[2]],]
     if(input$years != 1){sum.tbn34 <- sum.tbn34[sum.tbn34$Year == input$years,]}
-    if(input$taxas != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$Va.General %in% input$taxas,]}
-    if(input$citys != 1) {sum.tbn34 <- sum.tbn34[sum.tbn34$City %in% input$citys,]}
+    if(input$taxas != 1){sum.tbn34 <- sum.tbn34[sum.tbn34$Va.General %in% input$taxas,]}
+    if(input$citys != 1){sum.tbn34 <- sum.tbn34[sum.tbn34$City %in% input$citys,]}
     
     
     
