@@ -6,6 +6,7 @@ library(plyr)
 library(RColorBrewer)
 library(Cairo)
 library(dplyr)
+library(shinyBS)
 
 ## GOALS 3 panel page that uses side bar format to visualize data in a variety of ways
 # Phenology
@@ -22,8 +23,6 @@ str(tbn34)
 #convert to time format
 tbn34$sys.time <- as.POSIXct(tbn34$sys.time, tz = "MST")
 tbn34$month<- as.numeric(substring(tbn34$sys.time,first = 6,7))
-
-levels(tbn34$Va.General)
 
 taxa.names<- list('Anthidium', 
                   'Ashmeadiella',
@@ -67,7 +66,7 @@ block.numbers <- (unique(as.character(tbn34[,23])))
 names(block.numbers) <- (block.numbers)
 
 block.numbers <- sort(block.numbers)
-head(block.numbers)
+
 
 #User Interface
 ui2 <- fluidPage( theme = shinytheme('spacelab'),
@@ -94,15 +93,19 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                                                        options = list(create = T))
                                         ),
                                      fluidRow(
-                                       column(4, 
-                                               h3("Number of Nests"),
-                                               h1(textOutput("plug_tot")),
-                                              h4("Percentile: ", textOutput("tot_per"))
-                                              ),
+                                       column(4,  
+                                              h3("Number of Nests"),
+                                              h1(textOutput("plug_tot")),
+                                              h4("Percentile: ", 
+                                                 tipify(textOutput("tot_per"),"50th percentile is average")
+                                                 )
+                                       ),      
                                        column(4, 
                                               h3("Types of Nests"),
                                               h1(textOutput("plug_div")),
-                                              h4("Percentile: ",textOutput("plug_per"))
+                                              h4("Percentile: ", 
+                                                 tipify(textOutput("plug_per"),"50th percentile is average"))
+                                              
                                        ),
                                        column(4, 
                                               h3("Block Summary Statistics"),
@@ -296,25 +299,35 @@ server2 <- function(input, output){
   tbn34$Date_md <- format(tbn34$sys.time,format = "%m-%d")
   
   tbn34$Date_md <- as.Date(tbn34$Date_md,"%m-%d")
+  
+  tbn34$month <- as.numeric(format(tbn34$sys.time,format = "%m"))
     
   pheno.plot <- reactive({ 
     tbn.ph <- tbn34
-    tbn.ph <- tbn.ph[tbn.ph$month == input$months[[1]]:input$months[[2]],]
+    taxa.labels <- c("Unidentified", taxa.names)
+    tbn.ph <- tbn.ph[tbn.ph$month >= input$months[[1]] & tbn.ph$mont <= input$months[[2]],]
     if(input$year != 1){tbn.ph <- tbn.ph[tbn.ph$Year == input$year,]}
-    if(input$taxa != 1) {tbn.ph <- tbn.ph[tbn.ph$Va.General %in% input$taxa,]}
+    if(input$taxa != 1) {tbn.ph <- tbn.ph[tbn.ph$Va.General %in% input$taxa,]
+    taxa.selected <- paste(input$taxa,collapse = "|")
+    taxa.labels <- names(taxa.choices[grepl(pattern = taxa.selected,x =  taxa.choices)])
+    print(taxa.selected)
+    }
     if(input$city != 1) {tbn.ph <- tbn.ph[tbn.ph$City %in% input$city,]}
+    
+    
+    
     if(is.null(input$wrap)){
-      ggplot(tbn.ph,aes(Date_md, fill = Va.General)) +
-        geom_density(alpha = 0.25, aes(y = ..density..)) + 
-        labs( x = "Date", y= "Density") +
+      ggplot(tbn.ph,aes(x = Date_md, y = ..count.., fill = Va.General)) +
+        geom_density(alpha = 0.25) + 
+        labs( x = "Date", y= "Count") +
         theme_bw() +
         theme( axis.text.x  = element_text(size=16), 
                axis.text.y = element_text(size=16),
                axis.title.x  = element_text(size=16), 
                axis.title.y = element_text(size=16)) +
-        scale_fill_discrete(drop = F,
+        scale_fill_discrete(drop = T,
                             name = "Scientific Name",
-                            labels = c("Unidentified",taxa.names)) 
+                            labels = taxa.labels) 
       
     } else {
       if(input$wrap == "City") {
@@ -728,7 +741,10 @@ server2 <- function(input, output){
     substrRight <- function(x, n){
       substr(x, nchar(x)-n+1, nchar(x))
     }
-
+    grep
+  if(pie_stats[input$block == pie_stats$Block.number, 4] == "11|12|13") {
+    paste(pie_stats[pie_stats$Block.number == input$block, 4],"th", sep= "")
+  } else {
     if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "1" ) 
     {paste(pie_stats[pie_stats$Block.number == input$block, 4],"st", sep= "")} else {
       if(substrRight(x = pie_stats[pie_stats$Block.number == input$block, 4], n = 1) == "2" ) 
@@ -742,7 +758,7 @@ server2 <- function(input, output){
         }
       
       }
-    
+  }
   })
   
 output$plug_per <- renderText({ Plug_per() })
