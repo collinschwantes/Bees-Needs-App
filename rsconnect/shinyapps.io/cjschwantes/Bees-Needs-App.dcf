@@ -2,8 +2,8 @@ name: Bees-Needs-App
 account: cjschwantes
 server: shinyapps.io
 appId: 64397
-bundleId: 434246
+bundleId: 434274
 url: https://cjschwantes.shinyapps.io/Bees-Needs-App/
-when: 1461640223.4368
+when: 1461642545.31264
 asMultiple: FALSE
 asStatic: FALSE

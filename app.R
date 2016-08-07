@@ -85,7 +85,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                             tabPanel(title = "Block",
                                      fluidRow(
                                         h5("Enter your block number to see how your block compares to 
-                                       the whole bees needs data set.", style = "margin-top:15px;"),
+                                       the whole bees needs data set. On the pie chart below, the inner graph summarizes the whole dataset, the outer summarizes a single block.", style = "margin-top:15px;"),
                                         selectizeInput(inputId = "block",
                                                        label = "Bee Block Number",
                                                        choices = block.numbers,
@@ -104,7 +104,7 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                                               h3("Types of Nests"),
                                               h1(textOutput("plug_div")),
                                               h4("Percentile: ", 
-                                                 tipify(textOutput("plug_per"),"50th percentile is average"))
+                                                 tipify(textOutput("plug_per"),"Higher percentile is better"))
                                               
                                        ),
                                        column(4, 
@@ -314,45 +314,29 @@ server2 <- function(input, output){
     }
     if(input$city != 1) {tbn.ph <- tbn.ph[tbn.ph$City %in% input$city,]}
     
+    pheno  <- ggplot(tbn.ph,aes(x = Date_md, y = ..count.., fill = Va.General)) +
+      geom_density(alpha = 0.25) + 
+      labs( x = "Date", y= "Count") +
+      theme_bw() +
+      theme( axis.text.x  = element_text(size=16), 
+             axis.text.y = element_text(size=16),
+             axis.title.x  = element_text(size=16), 
+             axis.title.y = element_text(size=16)) +
+      scale_fill_discrete(drop = T,
+                          name = "Scientific Name",
+                          labels = taxa.labels)
     
     
     if(is.null(input$wrap)){
-      ggplot(tbn.ph,aes(x = Date_md, y = ..count.., fill = Va.General)) +
-        geom_density(alpha = 0.25) + 
-        labs( x = "Date", y= "Count") +
-        theme_bw() +
-        theme( axis.text.x  = element_text(size=16), 
-               axis.text.y = element_text(size=16),
-               axis.title.x  = element_text(size=16), 
-               axis.title.y = element_text(size=16)) +
-        scale_fill_discrete(drop = T,
-                            name = "Scientific Name",
-                            labels = taxa.labels) 
+    
+      pheno
       
     } else {
       if(input$wrap == "City") {
-        ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
-          geom_density(alpha = 0.25, aes(y = ..density..)) + #get the units of density from minutes to months
-          labs( x = "Date", y= "Density") +
-          theme( axis.text.x  = element_text(size=16), 
-                 axis.text.y = element_text(size=16),
-                 axis.title.x  = element_text(size=16), 
-                 axis.title.y = element_text(size=16)) +
-          theme_bw() +
-          scale_fill_discrete( drop = F,
-                               name = "Scientific Name",
-                               labels = c("Unidentified",taxa.names)) +
-          facet_wrap( ~City, drop = T,nrow = if(length(input$city) == 4){2} else{NULL}) } else {
+        
+        pheno +  facet_wrap( ~City, drop = T,nrow = if(length(input$city) == 4){2} else{NULL}) } else {
             if(input$wrap == "Va.General") { #TAXA
-              ggplot(tbn.ph,aes(sys.time, fill = Va.General)) +
-                geom_density(alpha = 0.25, aes(y =..density..)) + #get the units of density from minutes to months
-                labs( x = "Date", y= "Density") +
-                theme( axis.text.x  = element_text(size=16), 
-                       axis.text.y = element_text(size=16),
-                       axis.title.x  = element_text(size=16), 
-                       axis.title.y = element_text(size=16)) +
-                theme_bw()+
-                guides(fill=FALSE) +
+              pheno +
                 facet_wrap( ~Va.General,drop = T,
                             nrow = if(length(input$taxa) == 4){2}else{NULL}) 
             }
@@ -456,7 +440,7 @@ server2 <- function(input, output){
     if(input$dtrep == "Contours"){
       map1 <- tbn.map +
         stat_density2d(
-          aes(x = lon, y = lat, fill = ..level.., alpha = ..level..),
+          aes(x = lon, y = lat, fill = ..count.., alpha = ..count..),
           bins = 10, data = data,
           geom = "polygon"
         ) +
