@@ -10,6 +10,8 @@ library(shinyBS)
 library(KernSmooth)
 library(MASS)
 library(raster)
+library(htmltools)
+library(rgbif)
 
 ## GOALS 3 panel page that uses side bar format to visualize data in a variety of ways
 # Phenology
@@ -44,7 +46,7 @@ taxa.names<- list('Anthidium',
                   'Megachile: resin', 
                   'Megachilidae', 
                   'Osmia: mud', 
-                  'Osmia chewed leaves', 
+                  'Osmia: chewed leaves', 
                   'Pemphredine', 
                   'Pompilid', 
                   'Solierella', 
@@ -59,7 +61,8 @@ taxa.choices <- c(taxa.choices, all) # named list for selectize input
 city.choices <- levels(tbn34$City)
 city.choices <- city.choices[-1] # drop blanks
 trim.trailing <- function (x) sub("\\s+$", "", x) # function to trim trailing spaces
-city.choices<- trim.trailing(x = city.choices) # trim spaces
+city.choices <- trim.trailing(x = city.choices) # trim spaces
+city.choices <- paste(unique(city.choices)," Colorado",sep = ",")
 names(city.choices)  <- city.choices # created a named list
 all <- c("All" = '1')
 city.choices <- c(city.choices, all) # named list for selectize input
@@ -97,10 +100,33 @@ ui3 <- fluidPage( theme = shinytheme('spacelab'),
                                                     #set maptype
                                                    radioButtons(inputId = "mtype", label = h5("Map Type"),
                                                                 choices = list("Satellite" = "Esri.WorldImagery", "Toner" = "Stamen.Toner",
-                                                                 "HikeBike" = "HikeBike.HikeBike"), selected = "Esri.WorldImagery"))
+                                                                 "HikeBike" = "HikeBike.HikeBike"), selected = "Esri.WorldImagery"),
+                                                  #contour colors
+                                                  uiOutput("ConCol"),
+                                                  #taxa for the map
+                                                  selectizeInput(inputId = "taxaM",
+                                                                 label = "Insect type",
+                                                                 choices = taxa.choices,
+                                                                 select = 1,
+                                                                 multiple = T,
+                                                                 options = list(maxItems = 4)),
+                                                  #year
+                                                  selectizeInput(inputId = "yearM",
+                                                                 label = "Year",
+                                                                 select = 1,
+                                                                 choices = c(all,list( "2013" = 2013, "2014" = 2014))),
+                                                  
+                                                  #Date 
+                                                  sliderInput(inputId = "monthsM",
+                                                              label = "Month Range",
+                                                              min = 5,
+                                                              max = 11,
+                                                              value = c(5,11))
+                                           
+                                                  )
                                                   ,
                                           column(9,
-                                                leafletOutput(outputId = "Map", width = "1000", height = "750")
+                                                leafletOutput(outputId = "Map")
                                                  )
                                             )
                                         )
@@ -113,58 +139,81 @@ ui3 <- fluidPage( theme = shinytheme('spacelab'),
 server3 <- function(input, output){
   
   
-  
   ###### MAP  
   #location for map center   
   
    map.center <- reactive({
     as.matrix(geocode(input$cityM, output = "latlon"))
     })
-  #mtype <- reactive({as.character(input$mytpe)})
+   
+   print("MAP CENTER")
+  
+   #mtype <- reactive({as.character(input$mytpe)})
 
    
    #add geojson
-   ForGeoJson <- tbn34[!is.na(tbn34$Trusted.Latitude),]
    
-   names(ForGeoJson)
+   dataM <- reactive({ 
+     data <- tbn34[!is.na(tbn34$Trusted.Latitude),c(6,10:11,15,21,23,30,33,51,53,56)]
+     data <- data[data$month == input$monthsM[[1]]:input$monthsM[[2]],]
+     if(input$yearM != 1) {data <- data[data$Year == input$yearM,]}
+     if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]}
+
+     print(head(data))
+     str(data)
+     data
+   })
+     
+  
    
-   ForGeoJson <- ForGeoJson[,c(6,10:11,15,21,23,30,33,51,53,56)]
    
-   str(ForGeoJson)
-   
-   ForGeoJsonSP <- ForGeoJson
-   
+   Points <- reactive({ 
+  
+   ForGeoJsonSP <- dataM()
+   print("str(ForgeoJsonSP")
+   str(ForGeoJsonSP)
    #give it coords
    coordinates(ForGeoJsonSP) <- ~Trusted.Longitude+Trusted.Latitude
    class(ForGeoJsonSP)
    #give it projection
-   proj4string(ForGeoJsonSP) <- "+proj=longlat +ellps=WGS84"
+   proj4string(ForGeoJsonSP) <- "+init=epsg:4326 +proj=longlat +ellps=WGS84"
    proj4string(ForGeoJsonSP)
    
-   #make it geojson
-   test_geojson <- geojson_json(ForGeoJsonSP, lat = Trusted.Latitude, lon = Trusted.Longitude, pretty = T)
+  
+   
+  ForGeoJsonSP@data$Content <- paste(sep = "<br/>",
+                                     paste("<b>","Block Number ", ForGeoJsonSP@data$Block.number,"</b>",sep = ""),
+                                     paste("Plug Type:", ForGeoJsonSP@data$Va.Plug,sep = " "),
+                                     paste("Genus:",ForGeoJsonSP@data$Va.General,sep = " ")
+                                     )
+  
+   })
    
    
-   #get kernel density bandwidth 
+   ## contour lines
+  Polys <- reactive({
+  ForGeoJson  <- dataM()
+     #get kernel density bandwidth 
    bwy <- bandwidth.nrd(ForGeoJson[,2])
    bwx <- bandwidth.nrd(ForGeoJson[,3])
    
   #ForGeoJson <-ForGeoJson[ForGeoJson$Va.General == "OSMIM",] 
     table(ForGeoJson$Va.General)
   
-  DF_contour  <- ForGeoJson[ForGeoJson$Trusted.Longitude > -105.4 & ForGeoJson$Trusted.Longitude < -105 & ForGeoJson$Trusted.Latitude > 39.9 & ForGeoJson$Trusted.Longitude < 40.1 ,2:3]
-   #make contours
-   kde <- bkde2D(x = DF_contour, 
+  DF_contour <- ForGeoJson[ForGeoJson$Trusted.Longitude > -105.4 & ForGeoJson$Trusted.Longitude < -105 & ForGeoJson$Trusted.Latitude > 39.9 & ForGeoJson$Trusted.Longitude < 40.1, 3:2]
+  #make contours
+  kde <- bkde2D(x = DF_contour, 
                  bandwidth=c(bwy/10, bwx/10), gridsize = c(1000,1000))
    
    
-   test <- raster(list(x= kde$x1,y = kde$x2,z = kde$fhat))
+   #test <- raster(list(x= kde$x1,y = kde$x2,z = kde$fhat))
    
-   plot(test)
-   (CL)
-    contour(kde$x1,kde$x2,kde$fhat)
-   
-   CL <- contourLines(kde$x2 , kde$x1 , kde$fhat)
+   # plot(test)
+   # (CL)
+   # contour(kde$x1,kde$x2,kde$fhat)
+   # plot(ForGeoJson$Trusted.Longitude,ForGeoJson$Trusted.Latitude) 
+   # 
+   CL <- contourLines(kde$x1, kde$x2, kde$fhat)
    
   
    ## EXTRACT CONTOUR LINE LEVELS
@@ -173,23 +222,51 @@ server3 <- function(input, output){
    
    ## CONVERT CONTOUR LINES TO POLYGONS
    pgons <- lapply(1:length(CL), function(i)
-     Polygons(list(Polygon(cbind(CL[[i]]$x, CL[[i]]$y))), ID=i))
-   spgons <- SpatialPolygons(pgons,proj4string = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") )
-   #spgons_df <- SpatialPolygonsDataFrame(Sr = spgons, data = data.frame(color = c(heat.colors(NLEV,NULL)[LEVS])))
-   #poly_geojson <- geojson_json(input = spgons_df, geometry = "FeatureCollection",pretty = T)
+     Polygons(list(Polygon(cbind(CL[[i]]$x, CL[[i]]$y))), ID=i)
+     )
+   spgons <- SpatialPolygons(pgons, proj4string = CRS("+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") )
    
-   rev(rownames(brewer.pal.info))[1:18]
-   PAL <- brewer.pal(9,name = input$Color)
-   colfunc <- colorRampPalette(c(PAL[1],PAL[length(PAL)]))
-   colfunc(NLEV)[LEVS]
+   spgonsdf <- SpatialPolygonsDataFrame(Sr = spgons,data = data.frame("Density" = vapply(1:length(CL), function(x) CL[[x]]$level, FUN.VALUE = c(1)))) 
    
+   })
+   
+   output$ConCol <- renderUI({ 
+      PALS <- rev(rownames(brewer.pal.info))[1:18]
+      PALS <- PALS[c(7,5,14,18,13)]
+      PALSel <- setNames(as.list(PALS),PALS)
+      radioButtons(inputId = "ConCols",label = "Density Color",choices = PALSel, selected = "Blues")
+      })
+   
+   
+    ConCol <- reactive({
+      polys <- Polys()
+      NLEV <- length(levels(as.factor(polys$density)))
+      print(c("NUMBER OF LEVLES"),NLEV)
+      pal <- colorNumeric(palette = input$ConCols ,domain =  0:NLEV)
+      ConCol <- pal(NLEV)
+       })
+    
+     
+    # previewColors(colorNumeric("Blues", domain = NULL),values = 1:10)
+   
+    
+   #  colfunc <- colorRampPalette(c(PAL[1],PAL[length(PAL)]))
+   #  ConCol <- colfunc(NLEV)[LEVS]
+   # 
+     
+
+     
   output$Map <- renderLeaflet({
     mc <- map.center()
     leaflet() %>% 
-      addPolygons(data = spgons, color = colfunc(NLEV)[LEVS],stroke = 0) %>%
       setView(lng = mc[1], lat = mc[2], zoom = 10) %>% 
-      addProviderTiles(input$mtype)# %>%
-     # addGeoJSON(geojson = test_geojson) 
+      addProviderTiles(input$mtype) %>%
+      addPolygons(data = Polys(), color = ConCol(), stroke = 0,group = "Contours") %>%
+      #addLegend(position = "bottomright", pal = ConCol(), values = 0:100) %>%
+      addCircleMarkers(data = Points(), stroke = F, group = "Blocks",
+                       popup = ForGeoJsonSP@data$Content,
+                       clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F)) %>%
+      addLayersControl(overlayGroups = c("Contours","Blocks"))
       
   })
   
