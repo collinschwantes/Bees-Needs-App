@@ -1,4 +1,6 @@
-library(ggmap)
+library(ggmap) # used for geocode
+library(ggplot2)
+library(leaflet)
 library(shiny)
 library(shinythemes)
 library(DT)
@@ -7,6 +9,11 @@ library(RColorBrewer)
 library(Cairo)
 library(dplyr)
 library(shinyBS)
+library(KernSmooth)
+library(MASS)
+library(raster)
+library(htmltools)
+#library(rgbif)
 
 ## GOALS 3 panel page that uses side bar format to visualize data in a variety of ways
 # Phenology
@@ -212,71 +219,49 @@ ui2 <- fluidPage( theme = shinytheme('spacelab'),
                                      plotOutput(outputId = "summary", width = "100%", click = "")
                                      )
                                      ),
-                            tabPanel("Map",
-                                     checkboxInput(inputId = "instr", label = p(icon("eye"), "Map Instructions"), value = TRUE),
-                                     conditionalPanel(
-                                       condition = "input.instr == true",
-                                       includeHTML("./mapinst.html")),
-                                     
-                                     column(4,
-                                            #City
-                                            #City
-                                            selectizeInput(inputId = 'cityM',
-                                                           label = 'City',
-                                                           select = 1,
-                                                           multiple = T,
-                                                           choices = city.choices,
-                                                           options = list(maxItems = 4, create = TRUE)),
-                                            #Taxa
-                                            selectizeInput(inputId = "taxaM",
-                                                           label = "Insect type",
-                                                           choices = taxa.choices,
-                                                           select = 1,
-                                                           multiple = T,
-                                                           options = list(maxItems = 4)),
-                                            #year
-                                            selectizeInput(inputId = "yearM",
-                                                           label = "Year",
-                                                           select = 1,
-                                                           choices = c(all,list( "2013" = 2013, "2014" = 2014))),
-                                            
-                                            #Date 
-                                            sliderInput(inputId = "monthsM",
-                                                        label = "Month Range",
-                                                        min = 5,
-                                                        max = 11,
-                                                        value = c(5,11))
-                                            ),
-                                     
-                                     column(8,
-                                            fluidRow(
-                                              #set zoom
-                                              column(3, 
-                                                     numericInput(inputId = "zoom",
-                                                                     label = "Set your Map Scale",
-                                                                     value = 13,
-                                                                     min = 1, max = 18, step = 1)),
-                                              #set maptype
-                                              column(3,
-                                                     radioButtons(inputId = "mtype", label = h5("Map Type"),
-                                                                  choices = list("Watercolor" = "watercolor", "Toner" = "toner",
-                                                                                 "Terrain" = "terrain"), selected = "toner")),
-                                              #data display
-                                              column(3,
-                                                     checkboxGroupInput(inputId = "dtrep", 
-                                                                        label = "Data representation", 
-                                                                        select = "Contours",
-                                                                        choices = list("Nest Blocks" =  "Points",
-                                                                                       "Contours" = "Contours"),
-                                                                        inline = T)),
-                                             #Action button
-                                               column(3,
-                                                     actionButton(inputId = "update", label = "Update"))
-                                            ),
-                                            fluidRow(plotOutput(outputId = "map", width = "100%"))
-                                      
-                                     )
-                            )
+                          tabPanel("Map",
+                                    column(3,
+                                           #City
+                                           selectizeInput(inputId = 'cityM',
+                                                          label = 'City',
+                                                          select = "Boulder",
+                                                          multiple = T,
+                                                          choices = city.choices,
+                                                          options = list(maxItems = 1, create = F)),
+                                           #set maptype
+                                           radioButtons(inputId = "mtype", label = h5("Map Type"),
+                                                        choices = list("Satellite" = "Esri.WorldImagery", "Toner" = "Stamen.Toner",
+                                                                       "HikeBike" = "HikeBike.HikeBike"), selected = "Esri.WorldImagery"),
+                                           #contour colors
+                                           uiOutput("ConCol"),
+                                           #taxa for the map
+                                           selectizeInput(inputId = "taxaM",
+                                                          label = "Insect type",
+                                                          choices = taxa.choices,
+                                                          select = 1,
+                                                          multiple = T,
+                                                          options = list(maxItems = 4)),
+                                           #year
+                                           selectizeInput(inputId = "yearM",
+                                                          label = "Year",
+                                                          select = 1,
+                                                          choices = c(all,list( "2013" = 2013, "2014" = 2014))),
+                                           
+                                           #Date 
+                                           sliderInput(inputId = "monthsM",
+                                                       label = "Month Range",
+                                                       min = 1,
+                                                       max = 12,
+                                                       value = c(1,12))
+                                           
+                                    )
+                                    ,
+                                   
+                                    column( 9, 
+                                           tags$style(type = "text/css", "#Map {height: calc(100vh - 80px) !important;}"),
+                                           leafletOutput(outputId = "Map")
+                                    )
+                          )
 
                             #tabPanel("Table",dataTableOutput(outputId = "table", width = "100%"))
                      )
@@ -294,7 +279,6 @@ server2 <- function(input, output){
   #city
   
   f <- function(y) c(label=round(mean(y), digits = 1), y=median(y))
-  
   
   tbn34$Date_md <- format(tbn34$sys.time,format = "%m-%d")
   
@@ -419,155 +403,158 @@ server2 <- function(input, output){
   
   output$summary <- renderPlot({summary.plot()}, height = 500)
   
+  
   ###### MAP  
-  # subest data Map
-  Map.plot <- eventReactive(input$update,{ 
-    data <- tbn34
-    data <- data[data$month == input$monthsM[[1]]:input$monthsM[[2]],]
-    if(input$yearM != 1) {data <- data[data$Year == input$yearM,]}
-    if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]}
+  #location for map center   
+  
+  map.center <- reactive({
     
-    #location for map center   
-    map.center <- as.matrix(geocode(input$cityM[[1]], output = "latlon"))
+    mc <- paste(input$cityM," Colorado")
     
-    myMap <- get_map(location = map.center, 
-                     zoom = input$zoom,
-                     source = "stamen",
-                     maptype = input$mtype)
-    tbn.map <- ggmap(myMap, extent = "device")
+    as.matrix(geocode(mc, output = "latlon"))
     
-    #adding contours 
-    if(input$dtrep == "Contours"){
-      map1 <- tbn.map +
-        stat_density2d(
-          aes(x = lon, y = lat, fill = ..count.., alpha = ..count..),
-          bins = 10, data = data,
-          geom = "polygon"
-        ) +
-        scale_fill_continuous(name = "Psuedo-Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
-        guides(alpha=FALSE)
-    }  
-    #adding point
-    if(input$dtrep == "Points"){
-      map1 <- tbn.map +
-        geom_point(data = data, aes(x = lon, y = lat, color = Va.General),
-                   position = position_jitter(width = .0005, height = .0005), 
-                   size = 5, 
-                   alpha = .5
-        ) +
-        scale_color_discrete( drop = F,
-                              name = "Scientific Name",
-                              labels = c("Unidentified",taxa.names))
-    }
-    #adding point and contour
-    if(length(input$dtrep) > 1) {
-      map1 <-  tbn.map +
-        stat_density2d(
-          aes(x = lon, y = lat, fill = ..level.., alpha = ..level..),
-          bins = 10, data = data,
-          geom = "polygon"
-        ) +
-        scale_fill_continuous(name = "Psuedo-Abundance", low = "#deebf7", high = "#08589e",na.value = "black") +
-        guides(alpha=FALSE) +
-        geom_point(data = data, position = position_jitter(width = .0005, height = .0005), size = 3, alpha = .5, aes(x = lon, y = lat))
-    }
-    
-    
-    map1 
-    
-    
-    
-    
-    #    if(tbn34$Block.number %in% input$myloc) { 
-    #     
-    #    block_ll <- tbn34[tbn34$Block.number == input$myloc ,c(4,3)]
-    #   
-    #  block_text <- paste(block_ll[1,1],block_ll[1,2], sep = ",")
-    # 
-    #myMap <- get_map(location = block_text,
-    #                       zoom = input$zoom,
-    #                      source = "stamen",
-    #                       maptype = input$mtype 
-    #   )
-    #  
-    # data <- tbn34
-    #data <- data[data$month == input$months[[1]]:input$months[[2]],]
-    #      if(input$year != 1) {data <- data[data$Year == input$year,]}
-    #     if(input$taxa != 1) {data <- data[data$Va.General %in% input$taxa,]}
-    #    if(input$city != 1) {data <- data[data$City %in% input$city,]}
-    #   
-    #  
-    #str(tbn34)
-    
-    #      ggmap(myMap) +
-    #       stat_density2d(
-    #        aes(x = lon, y = lat, fill = Va.General, alpha = ..level..),
-    #        bins = 6, data = data,
-    #      geom = "polygon"
-    #  scale_fill_continuous(low = "#fff7ec", high = "#7f0000",na.value = "black")
-    
-    # geom_point(data = data, 
-    #           aes_string( x = "long", y = "lat",
-    #                      size = input$size, 
-    #                     colour = input$color, 
-    #                    alpha = input$alpha)
-    #) +
-    #guides( alpha = F) +
-    #scale_color_gradient(low = "yellow", high = "red") +
-    #scale_size_continuous(range = c(5,25), guide = F) +
-    #ggtitle(label = paste("Cavity Nesting Insects \n",
-    #                     "Size:",input$size, "Color:",
-    #                    input$color,"Transparecny:",
-    #                   input$alpha, sep = " ")) +
-    #theme(legend.position = "bottom") +
-    #labs(x = "Longitude", y = "Latitude")  +
-    #geom_point(data = block, aes_string(aes_string(x = "long", y = "lat")))
-    #} else {
-    #      myMap <- get_map(location = as.matrix(geocode(input$myloc, output = "latlon")),
-    #                      zoom = input$zoom,
-    #                     source = "stamen",
-    #                    maptype = input$mtype
-    #  )
-    
-    # data <- tbn34
-    #data <- data[data$month == input$months[[1]]:input$months[[2]],]
-    #      if(input$year != 1) {data <- data[data$Year == input$year,]}
-    #     if(input$taxa != 1) {data <- data[data$Va.General %in% input$taxa,]}
-    #    if(input$city != 1) {data <- data[data$City %in% input$city,]}
-    #   
-    
-    #      ggmap(myMap) +
-    #       stat_density2d(
-    #        aes(x = lon, y = lat, fill = ..level.., alpha = ..level..),
-    #       bins = 6, data = data,
-    #      geom = "polygon"
-    #   ) +
-    #  scale_fill_continuous(low = "#fff7ec", high = "#7f0000",na.value = "black")
-    # geom_point(data = data, 
-    #           aes_string( x = "long", y = "lat",
-    #                      size = input$size, 
-    #                     colour = input$color, 
-    #                    alpha = input$alpha)
-    #) +
-    #        guides( alpha = F) +
-    #       scale_color_gradient(low = "yellow", high = "red") +
-    #      scale_size_continuous(range = c(5,25), guide = F) +
-    #     ggtitle(label = paste("Cavity Nesting Insects \n",
-    #                          "Size:",input$size, "Color:",
-    #                         input$color,"Transparecny:",
-    #                        input$alpha, sep = " ")) +
-    # theme(legend.position = "bottom") +
-    #labs(x = "Longitude", y = "Latitude")
-    #}
   })
   
   
-  output$map <- renderPlot(height = 750,{ Map.plot()
+  output$ConCol <- renderUI({
+    PALS <- rev(rownames(brewer.pal.info))[1:18]
+    PALS <- PALS[c(7,5,14,18,13)]
+    PALSel <- setNames(as.list(PALS),PALS)
+    radioButtons(inputId = "ConCols",label = "Contour Color",choices = PALSel, selected = "Blues")
   })
   
-  # output$mapbrushed <- renderPrint({
-  #  brushedPoints(tbn34, input$map_brush)
-  # })
+  print("MAP CENTER")
+  
+  #mtype <- reactive({as.character(input$mytpe)})
+  
+  
+  #add geojson
+  
+  dataM <- reactive({ 
+    #tbn1314 <- read.csv(file = "./BeesNeedsdata.csv", strip.white = T)
+    message("Structure for Map data")
+    str(tbn34)
+    names(tbn34)
+    col_names <-c("Year", "Trusted.Latitude","Trusted.Longitude","Substrate.CATEGORY", "Block.type",
+       "Block.number", "Va.Plug", "Va.General", "sys.time","UTM.x","month")
+    #convert to time format
+    #tbn1314$sys.time <- as.POSIXct(tbn1314$sys.time, tz = "MST")
+    #tbn1314$month<- as.numeric(substring(tbn1314$sys.time,first = 6,7))
+    
+    data <- tbn34[!is.na(tbn34$Trusted.Latitude),col_names]
+    data <- data[data$month >= input$monthsM[[1]] & data$month <= input$monthsM[[2]],]
+    if(input$yearM != 1) {data <- data[data$Year == input$yearM,]} else {data}
+    if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]} else {data}
+    #View(data)
+    # print((data))
+    # message("****Data str****")
+    # str(data)
+    # print(5400)
+  })
+  
+  
+  
+  
+  Points <- reactive({ 
+    
+    str(dataM())
+    
+    ForGeoJsonSP <- na.omit(dataM())
+    
+    #message("strForgeoJsonSP")
+    #str(ForGeoJsonSP)
+    
+    #give it coords
+    coordinates(ForGeoJsonSP) <- ~Trusted.Longitude+Trusted.Latitude
+    #give it projection
+    proj4string(ForGeoJsonSP) <- "+init=epsg:4326 +proj=longlat +ellps=WGS84"
+    
+    Content <- paste(sep = "<br/>",
+                     paste("<b>","Block Number ", ForGeoJsonSP@data$Block.number,"</b>",sep = ""),
+                     paste("Plug Type:", ForGeoJsonSP@data$Va.Plug,sep = " "),
+                     paste("Genus:",ForGeoJsonSP@data$Va.General,sep = " "),
+                     paste("Date: ",ForGeoJsonSP@data$month,"/",ForGeoJsonSP@data$Year,sep = "")
+    )
+    print(head(Content))
+    
+    ForGeoJsonSP@data$Content <- Content 
+    message("strForgeoJsonSP post processing")
+    str(ForGeoJsonSP)
+    ForGeoJsonSP
+  })
+  
+  
+  # contour lines
+  Polys <- reactive({
+    
+    ForGeoJson  <- na.omit(dataM())
+    #get kernel density bandwidth
+    bwy <- bandwidth.nrd(ForGeoJson[,2])
+    bwx <- bandwidth.nrd(ForGeoJson[,3])
+    
+    #ForGeoJson <-ForGeoJson[ForGeoJson$Va.General == "OSMIM",]
+    #table(ForGeoJson$Va.General)
+    
+    DF_contour <- ForGeoJson[ForGeoJson$Trusted.Longitude > -105.4 & ForGeoJson$Trusted.Longitude < -105 & ForGeoJson$Trusted.Latitude > 39.9 & ForGeoJson$Trusted.Longitude < 40.1, 3:2]
+    #make contours
+    kde <- bkde2D(x = DF_contour,
+                  bandwidth=c(bwy/10, bwx/10), gridsize = c(1000,1000))
+    
+    
+    CL <- contourLines(kde$x1, kde$x2, kde$fhat)
+    
+    
+    ## EXTRACT CONTOUR LINE LEVELS
+    LEVS <- as.factor(sapply(CL, `[[`, "level"))
+    NLEV <- length(levels(LEVS))
+    
+    ## CONVERT CONTOUR LINES TO POLYGONS
+    pgons <- lapply(1:length(CL), function(i)
+      Polygons(list(Polygon(cbind(CL[[i]]$x, CL[[i]]$y))), ID=i)
+    )
+    spgons <- SpatialPolygons(pgons, proj4string = CRS("+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") )
+    
+    spgonsdf <- SpatialPolygonsDataFrame(Sr = spgons,data = data.frame("Density" = vapply(1:length(CL), function(x) CL[[x]]$level, FUN.VALUE = c(1))))
+    
+  })
+  
+
+  
+  
+  ConCol <- reactive({
+    # message("SpPolygon Structure")
+    # str(Polys())
+    polys <- Polys()
+    NLEV <- length(levels(as.factor(polys$density)))
+    print(c("NUMBER OF LEVLES",NLEV))
+    pal <- colorNumeric(palette = input$ConCols ,domain =  0:NLEV)
+    ConCol <- pal(NLEV)
+  })
+  
+  
+  
+  
+  # ,
+  # clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F)
+  
+  output$Map <- renderLeaflet({
+    
+    Points <- Points()
+    
+    mc <- map.center() #keep map center from updating each time the a subsetting parameter changes
+    
+    leaflet() %>% 
+      setView(lng = mc[1], lat = mc[2], zoom = 10) %>% 
+      addProviderTiles(input$mtype) %>%
+      addPolygons(data = Polys(), color = ConCol(), stroke = 0,group = "Contours") %>%
+      #addLegend(position = "bottomright", pal = ConCol(), values = 0:100) %>%
+      addCircleMarkers(data = Points, stroke = F, group = "Blocks",
+                       popup =Points@data$Content, 
+                       clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F))  %>%
+      addLayersControl(overlayGroups = c("Contours","Blocks"))
+    
+  })
+  
   
 ####### Pie Chart  
     

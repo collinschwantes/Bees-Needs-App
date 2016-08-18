@@ -119,14 +119,14 @@ ui3 <- fluidPage( theme = shinytheme('spacelab'),
                                                   #Date 
                                                   sliderInput(inputId = "monthsM",
                                                               label = "Month Range",
-                                                              min = 5,
-                                                              max = 11,
-                                                              value = c(5,11))
+                                                              min = 1,
+                                                              max = 12,
+                                                              value = c(1,12))
                                            
                                                   )
                                                   ,
-                                          column(9,
-                                                leafletOutput(outputId = "Map")
+                                          column(9, 
+                                                leafletOutput(outputId = "Map", height = "500px")
                                                  )
                                             )
                                         )
@@ -137,7 +137,6 @@ ui3 <- fluidPage( theme = shinytheme('spacelab'),
 
 
 server3 <- function(input, output){
-  
   
   ###### MAP  
   #location for map center   
@@ -155,117 +154,119 @@ server3 <- function(input, output){
    
    dataM <- reactive({ 
      data <- tbn34[!is.na(tbn34$Trusted.Latitude),c(6,10:11,15,21,23,30,33,51,53,56)]
-     data <- data[data$month == input$monthsM[[1]]:input$monthsM[[2]],]
-     if(input$yearM != 1) {data <- data[data$Year == input$yearM,]}
-     if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]}
-
-     print(head(data))
-     str(data)
-     data
+     data <- data[data$month >= input$monthsM[[1]] & data$month <= input$monthsM[[2]],]
+     if(input$yearM != 1) {data <- data[data$Year == input$yearM,]} else {data}
+     if(input$taxaM != 1) {data <- data[data$Va.General %in% input$taxaM,]} else {data}
+     #View(data)
+     # print((data))
+     # message("****Data str****")
+     # str(data)
+     # print(5400)
    })
      
   
    
    
-   Points <- reactive({ 
-  
-   ForGeoJsonSP <- dataM()
-   print("str(ForgeoJsonSP")
-   str(ForGeoJsonSP)
-   #give it coords
-   coordinates(ForGeoJsonSP) <- ~Trusted.Longitude+Trusted.Latitude
-   class(ForGeoJsonSP)
-   #give it projection
-   proj4string(ForGeoJsonSP) <- "+init=epsg:4326 +proj=longlat +ellps=WGS84"
-   proj4string(ForGeoJsonSP)
-   
-  
-   
-  ForGeoJsonSP@data$Content <- paste(sep = "<br/>",
-                                     paste("<b>","Block Number ", ForGeoJsonSP@data$Block.number,"</b>",sep = ""),
-                                     paste("Plug Type:", ForGeoJsonSP@data$Va.Plug,sep = " "),
-                                     paste("Genus:",ForGeoJsonSP@data$Va.General,sep = " ")
-                                     )
-  
+  Points <- reactive({ 
+    
+    str(dataM())
+    
+    ForGeoJsonSP <- na.omit(dataM())
+    
+    #message("strForgeoJsonSP")
+    #str(ForGeoJsonSP)
+    
+    #give it coords
+    coordinates(ForGeoJsonSP) <- ~Trusted.Longitude+Trusted.Latitude
+    #give it projection
+    proj4string(ForGeoJsonSP) <- "+init=epsg:4326 +proj=longlat +ellps=WGS84"
+    
+    Content <- paste(sep = "<br/>",
+                     paste("<b>","Block Number ", ForGeoJsonSP@data$Block.number,"</b>",sep = ""),
+                     paste("Plug Type:", ForGeoJsonSP@data$Va.Plug,sep = " "),
+                     paste("Genus:",ForGeoJsonSP@data$Va.General,sep = " "),
+                     paste("Date: ",ForGeoJsonSP@data$month,"/",ForGeoJsonSP@data$Year,sep = "")
+    )
+    print(head(Content))
+    
+    ForGeoJsonSP@data$Content <- Content 
+    message("strForgeoJsonSP post processing")
+    str(ForGeoJsonSP)
+    ForGeoJsonSP
    })
    
    
-   ## contour lines
+  # contour lines
   Polys <- reactive({
-  ForGeoJson  <- dataM()
-     #get kernel density bandwidth 
+    
+   ForGeoJson  <- na.omit(dataM())
+   #get kernel density bandwidth
    bwy <- bandwidth.nrd(ForGeoJson[,2])
    bwx <- bandwidth.nrd(ForGeoJson[,3])
-   
-  #ForGeoJson <-ForGeoJson[ForGeoJson$Va.General == "OSMIM",] 
-    table(ForGeoJson$Va.General)
-  
-  DF_contour <- ForGeoJson[ForGeoJson$Trusted.Longitude > -105.4 & ForGeoJson$Trusted.Longitude < -105 & ForGeoJson$Trusted.Latitude > 39.9 & ForGeoJson$Trusted.Longitude < 40.1, 3:2]
-  #make contours
-  kde <- bkde2D(x = DF_contour, 
+
+    #ForGeoJson <-ForGeoJson[ForGeoJson$Va.General == "OSMIM",]
+    #table(ForGeoJson$Va.General)
+
+    DF_contour <- ForGeoJson[ForGeoJson$Trusted.Longitude > -105.4 & ForGeoJson$Trusted.Longitude < -105 & ForGeoJson$Trusted.Latitude > 39.9 & ForGeoJson$Trusted.Longitude < 40.1, 3:2]
+    #make contours
+    kde <- bkde2D(x = DF_contour,
                  bandwidth=c(bwy/10, bwx/10), gridsize = c(1000,1000))
-   
-   
-   #test <- raster(list(x= kde$x1,y = kde$x2,z = kde$fhat))
-   
-   # plot(test)
-   # (CL)
-   # contour(kde$x1,kde$x2,kde$fhat)
-   # plot(ForGeoJson$Trusted.Longitude,ForGeoJson$Trusted.Latitude) 
-   # 
-   CL <- contourLines(kde$x1, kde$x2, kde$fhat)
-   
-  
-   ## EXTRACT CONTOUR LINE LEVELS
-   LEVS <- as.factor(sapply(CL, `[[`, "level"))
-   NLEV <- length(levels(LEVS))
-   
-   ## CONVERT CONTOUR LINES TO POLYGONS
-   pgons <- lapply(1:length(CL), function(i)
-     Polygons(list(Polygon(cbind(CL[[i]]$x, CL[[i]]$y))), ID=i)
+
+
+    CL <- contourLines(kde$x1, kde$x2, kde$fhat)
+
+
+    ## EXTRACT CONTOUR LINE LEVELS
+    LEVS <- as.factor(sapply(CL, `[[`, "level"))
+    NLEV <- length(levels(LEVS))
+
+    ## CONVERT CONTOUR LINES TO POLYGONS
+    pgons <- lapply(1:length(CL), function(i)
+    Polygons(list(Polygon(cbind(CL[[i]]$x, CL[[i]]$y))), ID=i)
      )
-   spgons <- SpatialPolygons(pgons, proj4string = CRS("+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") )
-   
-   spgonsdf <- SpatialPolygonsDataFrame(Sr = spgons,data = data.frame("Density" = vapply(1:length(CL), function(x) CL[[x]]$level, FUN.VALUE = c(1)))) 
-   
+    spgons <- SpatialPolygons(pgons, proj4string = CRS("+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") )
+
+    spgonsdf <- SpatialPolygonsDataFrame(Sr = spgons,data = data.frame("Density" = vapply(1:length(CL), function(x) CL[[x]]$level, FUN.VALUE = c(1))))
+
    })
-   
-   output$ConCol <- renderUI({ 
+
+   output$ConCol <- renderUI({
       PALS <- rev(rownames(brewer.pal.info))[1:18]
       PALS <- PALS[c(7,5,14,18,13)]
       PALSel <- setNames(as.list(PALS),PALS)
-      radioButtons(inputId = "ConCols",label = "Density Color",choices = PALSel, selected = "Blues")
+      radioButtons(inputId = "ConCols",label = "Contour Color",choices = PALSel, selected = "Blues")
       })
-   
-   
+
+
     ConCol <- reactive({
+     # message("SpPolygon Structure")
+     # str(Polys())
       polys <- Polys()
       NLEV <- length(levels(as.factor(polys$density)))
-      print(c("NUMBER OF LEVLES"),NLEV)
+      print(c("NUMBER OF LEVLES",NLEV))
       pal <- colorNumeric(palette = input$ConCols ,domain =  0:NLEV)
       ConCol <- pal(NLEV)
-       })
-    
-     
-    # previewColors(colorNumeric("Blues", domain = NULL),values = 1:10)
-   
-    
-   #  colfunc <- colorRampPalette(c(PAL[1],PAL[length(PAL)]))
-   #  ConCol <- colfunc(NLEV)[LEVS]
-   # 
-     
+      })
 
      
+  
+     
+    # ,
+    # clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F)
+     
   output$Map <- renderLeaflet({
+    
+     Points <- Points()
+    
     mc <- map.center()
     leaflet() %>% 
       setView(lng = mc[1], lat = mc[2], zoom = 10) %>% 
       addProviderTiles(input$mtype) %>%
       addPolygons(data = Polys(), color = ConCol(), stroke = 0,group = "Contours") %>%
       #addLegend(position = "bottomright", pal = ConCol(), values = 0:100) %>%
-      addCircleMarkers(data = Points(), stroke = F, group = "Blocks",
-                       popup = ForGeoJsonSP@data$Content,
-                       clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F)) %>%
+      addCircleMarkers(data = Points, stroke = F, group = "Blocks",
+                       popup =Points@data$Content, 
+                       clusterOptions = markerClusterOptions( showCoverageOnHover = TRUE, spiderfyOnMaxZoom = TRUE, removeOutsideVisibleBounds = F))  %>%
       addLayersControl(overlayGroups = c("Contours","Blocks"))
       
   })
