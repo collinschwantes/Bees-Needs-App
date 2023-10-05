@@ -1,3 +1,6 @@
+[![DOI](https://zenodo.org/badge/44404426.svg)](https://zenodo.org/badge/latestdoi/44404426)
+
+
 # Bees-Needs-App
 Data visualization application for the Bee's Needs citizen science project
 
